@@ -20,7 +20,7 @@ import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Loader2, User, Lock, Compass } from "lucide-react";
+import { Loader2, User, Lock, Compass, Eye, EyeOff } from "lucide-react";
 
 const loginSchema = z.object({
   username: z
@@ -47,6 +47,8 @@ const itemVariants = {
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -160,12 +162,25 @@ export default function LoginPage() {
                     <Lock className="h-3 w-3" /> SECURE_KEY
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="••••••••"
-                      {...field}
-                      className="h-12 border-2 border-black rounded-none bg-white font-mono text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-500 transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] focus:shadow-[3px_3px_0px_0px_rgba(59,130,246,1)] transition-shadow"
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        {...field}
+                        className="h-12 border-2 border-black rounded-none bg-white font-mono text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-500 transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] focus:shadow-[3px_3px_0px_0px_rgba(59,130,246,1)] transition-shadow pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:text-blue-500 transition-colors"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage className="text-[10px] font-bold uppercase" />
                 </FormItem>

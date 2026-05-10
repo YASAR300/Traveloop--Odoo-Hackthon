@@ -32,6 +32,8 @@ import {
   FileText,
   AtSign,
   Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const signupSchema = z.object({
@@ -78,6 +80,8 @@ export default function SignupPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
 
   const form = useForm({
     resolver: zodResolver(signupSchema),
@@ -333,12 +337,25 @@ export default function SignupPage() {
                     <Lock className="h-3 w-3" /> Password
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="••••••"
-                      {...field}
-                      className={inputClass}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••"
+                        {...field}
+                        className={`${inputClass} pr-10`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage className="text-[9px] font-bold uppercase" />
                 </FormItem>
