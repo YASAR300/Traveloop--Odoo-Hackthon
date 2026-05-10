@@ -6,8 +6,9 @@ import SearchCard from "@/components/search/SearchCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { Target, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { Suspense } from "react";
 
-export default function ActivitiesSearchPage() {
+function ActivitiesContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
   
@@ -20,26 +21,21 @@ export default function ActivitiesSearchPage() {
     const fetchResults = async () => {
       setLoading(true);
       try {
-        // Mocking API call for now
-        // In reality: const res = await fetch(`/api/activities?q=${query}&...`);
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network
+        const res = await fetch(`/api/activities?search=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error("Fetch failed");
+        const data = await res.json();
+        setResults(Array.isArray(data) ? data : []);
         
-        const mockData = [
-          { id: "1", title: "Paragliding over Bali", sectionType: "ADVENTURE", cost: 4500, duration: "3h", city: { name: "Ubud" }, description: "Soar like an eagle over the breathtaking landscapes of Bali's central highlands." },
-          { id: "2", title: "Sunset Seafood Dinner", sectionType: "FOOD & DINING", cost: 2000, duration: "2h", city: { name: "Jimbaran" }, description: "Enjoy fresh catch of the day while watching the legendary Jimbaran sunset." },
-          { id: "3", title: "Uluwatu Temple Visit", sectionType: "SIGHTSEEING", cost: 800, duration: "4h", city: { name: "Uluwatu" }, description: "Ancient clifftop temple with mesmerizing kecak fire dance performances." },
-          { id: "4", title: "Scuba Diving", sectionType: "ADVENTURE", cost: 6500, duration: "6h", city: { name: "Nusa Penida" }, description: "Explore the vibrant coral reefs and manta rays of the Indian Ocean." },
-          { id: "5", title: "Cooking Class", sectionType: "CULTURE", cost: 1500, duration: "3h", city: { name: "Seminyak" }, description: "Learn the secrets of Balinese spices and traditional cooking techniques." },
-        ];
-
-        // Filter based on query if exists
-        const filtered = query 
-          ? mockData.filter(item => item.title.toLowerCase().includes(query.toLowerCase()))
-          : mockData;
-
-        setResults(filtered);
+        // Fetch saved status
+        const savedRes = await fetch("/api/user/saved");
+        if (savedRes.ok) {
+          const savedData = await savedRes.json();
+          setSavedIds(new Set(savedData.activities.map(a => a.id)));
+        }
       } catch (err) {
+        console.error("Activities Fetch Error:", err);
         toast.error("Failed to fetch activities");
+        setResults([]);
       } finally {
         setLoading(false);
       }
@@ -49,14 +45,28 @@ export default function ActivitiesSearchPage() {
   }, [query]);
 
   const toggleSave = async (id) => {
-    setSavedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    // POST /api/user/saved...
-    toast.success("Preference updated!");
+    try {
+      const res = await fetch("/api/user/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityId: id })
+      });
+
+      if (!res.ok) throw new Error("Failed to save");
+      
+      const data = await res.json();
+      
+      setSavedIds(prev => {
+        const next = new Set(prev);
+        if (data.status === "removed") next.delete(id);
+        else next.add(id);
+        return next;
+      });
+
+      toast.success(data.status === "saved" ? "Activity bookmarked!" : "Removed from bookmarks");
+    } catch (err) {
+      toast.error("Could not update bookmark");
+    }
   };
 
   return (
@@ -79,7 +89,6 @@ export default function ActivitiesSearchPage() {
       {/* Results List */}
       <div className="space-y-4">
         {loading ? (
-          // Skeleton Pulse Cards
           [1, 2, 3].map(i => (
             <div key={i} className="h-20 bg-gray-100 border-4 border-black animate-pulse shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)]" />
           ))
@@ -112,5 +121,13 @@ export default function ActivitiesSearchPage() {
         )}
       </div>
     </motion.div>
+  );
+}
+
+export default function ActivitiesSearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <ActivitiesContent />
+    </Suspense>
   );
 }

@@ -2,15 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search, SlidersHorizontal, ArrowUpDown, LayoutGrid, X } from "lucide-react";
+import { Search, SlidersHorizontal, ArrowUpDown, LayoutGrid, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import debounce from "lodash/debounce";
+import { Suspense } from "react";
 
-export default function SearchLayout({ children }) {
+function SearchContent({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -136,30 +137,45 @@ export default function SearchLayout({ children }) {
           </div>
         </div>
 
-        {/* Popular Tags */}
-        <AnimatePresence>
-          {!query && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-6 flex flex-wrap gap-2 items-center"
+        {/* Popular Tags - Always visible for quick access */}
+        <div className="mt-6 flex flex-wrap gap-2 items-center">
+          <span className="text-[10px] font-black uppercase text-gray-400 mr-2">Popular:</span>
+          {["Paragliding", "Beach", "Temples", "Street Food", "Adventure", "Nightlife", "Museums"].map(tag => (
+            <button 
+              key={tag}
+              onClick={() => { 
+                setQuery(tag); 
+                updateSearch(tag); 
+                // Force sync URL immediately
+                const params = new URLSearchParams(searchParams);
+                params.set("q", tag);
+                router.push(`${pathname}?${params.toString()}`);
+              }}
+              className={cn(
+                "px-3 py-1 border-2 border-black text-[10px] font-black uppercase italic transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none active:translate-y-[2px]",
+                query === tag ? "bg-black text-white shadow-none" : "hover:bg-black hover:text-white"
+              )}
             >
-              <span className="text-[10px] font-black uppercase text-gray-400 mr-2">Popular:</span>
-              {["Paragliding", "Beach", "Temples", "Street Food", "Adventure"].map(tag => (
-                <button 
-                  key={tag}
-                  onClick={() => { setQuery(tag); updateSearch(tag); }}
-                  className="px-3 py-1 border-2 border-black text-[10px] font-black uppercase italic hover:bg-black hover:text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
-                >
-                  {tag}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
+              {tag}
+            </button>
+          ))}
+        </div>
       </div>
 
       {children}
     </div>
+  );
+}
+
+export default function SearchLayout({ children }) {
+  return (
+    <Suspense fallback={
+      <div className="max-w-6xl mx-auto px-4 pt-10 pb-20 flex flex-col items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-500 mb-4" />
+        <span className="font-black uppercase italic tracking-tighter">Initializing Search...</span>
+      </div>
+    }>
+      <SearchContent>{children}</SearchContent>
+    </Suspense>
   );
 }

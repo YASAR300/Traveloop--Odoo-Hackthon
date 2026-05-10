@@ -6,8 +6,9 @@ import SearchCard from "@/components/search/SearchCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { Globe, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { Suspense } from "react";
 
-export default function CitiesSearchPage() {
+function CitiesContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
   
@@ -18,28 +19,29 @@ export default function CitiesSearchPage() {
 
   useEffect(() => {
     const fetchResults = async () => {
+      if (!query || query.length < 2) {
+        setResults([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate network
+        const res = await fetch(`/api/cities?search=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error("Fetch failed");
+        const data = await res.json();
+        setResults(Array.isArray(data) ? data : []);
         
-        const mockData = [
-          { id: "c1", name: "Bali", country: "Indonesia", region: "ASIA", costIndex: "$$", popularity: "Legendary", description: "The Island of Gods, where vibrant culture meets stunning natural beauty." },
-          { id: "c2", name: "Tokyo", country: "Japan", region: "ASIA", costIndex: "$$$", popularity: "High", description: "A neon-lit metropolis blending futuristic tech with ancient traditions." },
-          { id: "c3", name: "Paris", country: "France", region: "EUROPE", costIndex: "$$$+", popularity: "High", description: "The city of lights, love, and world-class culinary experiences." },
-          { id: "c4", name: "Dubai", country: "UAE", region: "MIDDLE EAST", costIndex: "$$$", popularity: "Very High", description: "A desert oasis of luxury, innovation, and record-breaking architecture." },
-          { id: "c5", name: "Cape Town", country: "South Africa", region: "AFRICA", costIndex: "$$", popularity: "High", description: "A breathtaking coastal city at the foot of Table Mountain." },
-        ];
-
-        const filtered = query 
-          ? mockData.filter(item => 
-              item.name.toLowerCase().includes(query.toLowerCase()) || 
-              item.country.toLowerCase().includes(query.toLowerCase())
-            )
-          : mockData;
-
-        setResults(filtered);
+        // Fetch saved status
+        const savedRes = await fetch("/api/user/saved");
+        if (savedRes.ok) {
+          const savedData = await savedRes.json();
+          setSavedIds(new Set(savedData.cities.map(c => c.id)));
+        }
       } catch (err) {
+        console.error("Cities Fetch Error:", err);
         toast.error("Failed to fetch cities");
+        setResults([]);
       } finally {
         setLoading(false);
       }
@@ -49,13 +51,28 @@ export default function CitiesSearchPage() {
   }, [query]);
 
   const toggleSave = async (id) => {
-    setSavedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    toast.success("Destination bookmarked!");
+    try {
+      const res = await fetch("/api/user/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cityId: id })
+      });
+
+      if (!res.ok) throw new Error("Failed to save");
+      
+      const data = await res.json();
+      
+      setSavedIds(prev => {
+        const next = new Set(prev);
+        if (data.status === "removed") next.delete(id);
+        else next.add(id);
+        return next;
+      });
+
+      toast.success(data.status === "saved" ? "City bookmarked!" : "Removed from bookmarks");
+    } catch (err) {
+      toast.error("Could not update bookmark");
+    }
   };
 
   return (
@@ -108,5 +125,13 @@ export default function CitiesSearchPage() {
         )}
       </div>
     </motion.div>
+  );
+}
+
+export default function CitiesSearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <CitiesContent />
+    </Suspense>
   );
 }

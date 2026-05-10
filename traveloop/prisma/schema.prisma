@@ -39,6 +39,8 @@ model User {
   communityPosts     CommunityPost[]
   communityLikes     CommunityLike[]
   adminLogs          AdminLog[]
+  savedActivities    SavedActivity[]
+  savedCities        SavedCity[]
 
   @@map("users")
 }
@@ -103,6 +105,7 @@ model City {
   // Relations
   activities  Activity[]
   stops       Stop[]
+  savedBy     SavedCity[]
 
   @@map("cities")
 }
@@ -125,6 +128,7 @@ model Activity {
   // Relations
   city           City           @relation(fields: [cityId], references: [id], onDelete: Cascade)
   stopActivities StopActivity[]
+  savedBy        SavedActivity[]
 
   @@map("activities")
 }
@@ -395,4 +399,30 @@ model AdminLog {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("admin_logs")
+}
+
+model SavedActivity {
+  id         String   @id @default(cuid())
+  userId     String
+  activityId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activityId])
+  @@map("saved_activities")
+}
+
+model SavedCity {
+  id        String   @id @default(cuid())
+  userId    String
+  cityId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city City @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cityId])
+  @@map("saved_cities")
 }

@@ -7,21 +7,36 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const cityId = searchParams.get("cityId");
+    const search = searchParams.get("search");
     const limit = parseInt(searchParams.get("limit") || "6");
 
-    if (!cityId) {
-      const topActivities = await prisma.activity.findMany({
+    let activities = [];
+
+    if (search) {
+      activities = await prisma.activity.findMany({
+        where: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
+          ]
+        },
+        include: { city: true },
+        take: limit,
+      });
+    } else if (cityId) {
+      activities = await prisma.activity.findMany({
+        where: { cityId },
+        include: { city: true },
         orderBy: { popularity: "desc" },
         take: limit,
       });
-      return NextResponse.json(topActivities);
+    } else {
+      activities = await prisma.activity.findMany({
+        include: { city: true },
+        orderBy: { popularity: "desc" },
+        take: limit,
+      });
     }
-
-    let activities = await prisma.activity.findMany({
-      where: { cityId },
-      orderBy: { popularity: "desc" },
-      take: limit,
-    });
 
     if (activities.length === 0) {
       // Extract city name from ID (ext_city-name -> City Name)
