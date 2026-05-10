@@ -25,7 +25,8 @@ import {
   Share2,
   MoreVertical,
   ArrowRight,
-  Loader2
+  Loader2,
+  StickyNote
 } from "lucide-react";
 import { 
   DndContext, 
@@ -720,6 +721,18 @@ export default function AdvancedItineraryPage() {
                 <Link href={`/trips/${tripId}/packing`} className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4" />
                   <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Packing</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="border-2 border-black rounded-none h-10 px-4 flex items-center gap-2 hover:bg-amber-400 hover:text-white transition-all">
+                <Link href={`/trips/${tripId}/notes`} className="flex items-center gap-2">
+                  <StickyNote className="h-4 w-4" />
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Notes</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="border-2 border-black rounded-none h-10 px-4 flex items-center gap-2 hover:bg-gray-100 transition-all">
+                <Link href={`/trips/${tripId}/invoice`} className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Invoice</span>
                 </Link>
               </Button>
               <Button variant="outline" className="border-2 border-black rounded-none h-10 px-4">

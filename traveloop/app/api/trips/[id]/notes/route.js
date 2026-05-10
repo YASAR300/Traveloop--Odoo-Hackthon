@@ -6,7 +6,7 @@ export async function GET(req, { params }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id: tripId } = params;
+  const { id: tripId } = await params;
   const { searchParams } = new URL(req.url);
   const tab = searchParams.get("tab") || "all";
   const q = searchParams.get("q") || "";
@@ -51,7 +51,7 @@ export async function POST(req, { params }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id: tripId } = params;
+  const { id: tripId } = await params;
   const body = await req.json();
 
   try {

@@ -19,7 +19,9 @@ import {
   Compass,
   Search,
   Globe,
-  DollarSign
+  DollarSign,
+  StickyNote,
+  FileText
 } from "lucide-react";
 import { format, isWithinInterval, isAfter, isBefore, addDays, startOfDay } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -193,6 +195,16 @@ const TripCard = ({ trip, onEdit, onDelete, onDuplicate }) => {
           </Link>
         </Button>
         <Button 
+          asChild 
+          variant="outline" 
+          className="w-10 h-10 border-2 border-black rounded-none p-0 hover:bg-amber-400 hover:text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
+          title="Trip Notes"
+        >
+          <Link href={`/trips/${trip.id}/notes`}>
+            <StickyNote className="h-4 w-4" />
+          </Link>
+        </Button>
+        <Button 
           onClick={() => onEdit(trip)}
           variant="outline" 
           className="w-10 h-10 border-2 border-black rounded-none p-0 hover:bg-blue-500 hover:text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
@@ -217,6 +229,24 @@ const TripCard = ({ trip, onEdit, onDelete, onDuplicate }) => {
               <Link href={`/trips/${trip.id}/packing`} className="flex items-center gap-3 w-full">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Packing Checklist</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="rounded-none px-4 py-2.5 cursor-pointer hover:bg-gray-100 gap-3"
+              asChild
+            >
+              <Link href={`/trips/${trip.id}/notes`} className="flex items-center gap-3 w-full">
+                <StickyNote className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Trip Notes</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="rounded-none px-4 py-2.5 cursor-pointer hover:bg-gray-100 gap-3"
+              asChild
+            >
+              <Link href={`/trips/${trip.id}/invoice`} className="flex items-center gap-3 w-full">
+                <FileText className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Expense Invoice</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem 

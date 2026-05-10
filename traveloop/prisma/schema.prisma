@@ -2,6 +2,7 @@
 
 generator client {
   provider        = "prisma-client-js"
+  output          = "../node_modules/.prisma/client"
   previewFeatures = ["driverAdapters"]
 }
 
@@ -163,8 +164,15 @@ model Trip {
   isPublic             Boolean   @default(false)
   shareToken           String    @unique @default(cuid())
   checklistShareToken  String    @unique @default(cuid())
+  
+  // Invoice & Billing
+  invoiceId            String?   @unique
+  invoiceGeneratedAt   DateTime?
+  invoiceDiscount      Float     @default(0)
+  taxPercent           Float     @default(5.0)
+  travelerNames        String[]  @default([])
   invoiceStatus        String    @default("pending") // "pending" | "paid"
-  taxPercent           Float     @default(18.0)
+
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
