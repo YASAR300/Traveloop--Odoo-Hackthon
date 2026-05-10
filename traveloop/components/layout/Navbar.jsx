@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -47,7 +48,6 @@ const navLinks = [
   { label: "CITY SEARCH", href: "/search/cities", icon: Globe },
   { label: "ACTIVITIES", href: "/search/activities", icon: Compass },
   { label: "COMMUNITY", href: "/community", icon: Users },
-  { label: "PROFILE", href: "/profile", icon: User },
 ];
 
 const adminLink = { label: "ADMIN", href: "/admin", icon: Shield };
@@ -188,14 +188,16 @@ export default function Navbar() {
               align="end"
               className="w-52 rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-0"
             >
-              <DropdownMenuLabel className="bg-black text-white px-4 py-3 rounded-none">
-                <p className="text-xs font-black uppercase tracking-widest">
-                  {session?.user?.name || "Explorer"}
-                </p>
-                <p className="text-[10px] font-mono text-gray-400 truncate mt-0.5">
-                  {session?.user?.email || ""}
-                </p>
-              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="bg-black text-white px-4 py-3 rounded-none">
+                  <p className="text-xs font-black uppercase tracking-widest">
+                    {session?.user?.name || "Explorer"}
+                  </p>
+                  <p className="text-[10px] font-mono text-gray-400 truncate mt-0.5">
+                    {session?.user?.email || ""}
+                  </p>
+                </DropdownMenuLabel>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator className="m-0 border-t-2 border-black" />
               <DropdownMenuItem asChild className="rounded-none px-4 py-2.5 cursor-pointer hover:bg-gray-100 focus:bg-gray-100">
                 <Link href="/profile" className="flex items-center gap-2">

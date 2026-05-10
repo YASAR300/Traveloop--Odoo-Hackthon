@@ -1,1 +1,6 @@
-export default function Page() { return <div>Page</div>; }
+import { redirect } from "next/navigation";
+
+export default async function TripLandingPage({ params }) {
+  const { id } = await params;
+  redirect(`/trips/${id}/itinerary`);
+}

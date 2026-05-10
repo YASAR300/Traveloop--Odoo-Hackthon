@@ -81,17 +81,14 @@ export default function PageTopBar({
       {/* Group By */}
       {groupByOptions.length > 0 ? (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className={`h-10 gap-1.5 border-2 border-black rounded-none font-black text-[10px] uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all ${
-                activeGroupBy ? "bg-black text-white" : "bg-white text-black"
-              }`}
-            >
-              <LayoutGrid className="h-3 w-3" />
-              Group By
-              <ChevronDown className="h-3 w-3" />
-            </Button>
+          <DropdownMenuTrigger
+            className={`h-10 px-4 flex items-center justify-center gap-1.5 border-2 border-black rounded-none font-black text-[10px] uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all cursor-pointer ${
+              activeGroupBy ? "bg-black text-white" : "bg-white text-black"
+            }`}
+          >
+            <LayoutGrid className="h-3 w-3" />
+            Group By
+            <ChevronDown className="h-3 w-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-w-[140px]">
             {groupByOptions.map((opt) => (
@@ -121,17 +118,14 @@ export default function PageTopBar({
       {/* Filter */}
       {filterOptions.length > 0 ? (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className={`h-10 gap-1.5 border-2 border-black rounded-none font-black text-[10px] uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all ${
-                activeFilter ? "bg-black text-white" : "bg-white text-black"
-              }`}
-            >
-              <SlidersHorizontal className="h-3 w-3" />
-              Filter
-              <ChevronDown className="h-3 w-3" />
-            </Button>
+          <DropdownMenuTrigger
+            className={`h-10 px-4 flex items-center justify-center gap-1.5 border-2 border-black rounded-none font-black text-[10px] uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all cursor-pointer ${
+              activeFilter ? "bg-black text-white" : "bg-white text-black"
+            }`}
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            Filter
+            <ChevronDown className="h-3 w-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-w-[140px]">
             {filterOptions.map((opt) => (
@@ -161,17 +155,14 @@ export default function PageTopBar({
       {/* Sort By */}
       {sortOptions.length > 0 ? (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className={`h-10 gap-1.5 border-2 border-black rounded-none font-black text-[10px] uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all ${
-                activeSort ? "bg-black text-white" : "bg-white text-black"
-              }`}
-            >
-              <ArrowUpDown className="h-3 w-3" />
-              Sort By
-              <ChevronDown className="h-3 w-3" />
-            </Button>
+          <DropdownMenuTrigger
+            className={`h-10 px-4 flex items-center justify-center gap-1.5 border-2 border-black rounded-none font-black text-[10px] uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all cursor-pointer ${
+              activeSort ? "bg-black text-white" : "bg-white text-black"
+            }`}
+          >
+            <ArrowUpDown className="h-3 w-3" />
+            Sort By
+            <ChevronDown className="h-3 w-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-w-[140px]">
             {sortOptions.map((opt) => (

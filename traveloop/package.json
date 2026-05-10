@@ -23,6 +23,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
