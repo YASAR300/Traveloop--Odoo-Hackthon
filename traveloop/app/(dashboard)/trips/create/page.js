@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format, isAfter } from "date-fns";
+import { format, isAfter, differenceInDays } from "date-fns";
 import { 
   Calendar as CalendarIcon, 
   MapPin, 
@@ -15,7 +15,10 @@ import {
   Loader2, 
   Plus,
   Compass,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  X,
+  Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,14 +41,17 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+const stopSchema = z.object({
+  cityId: z.string().min(1, "Place is required"),
+  cityName: z.string(),
+  startDate: z.date(),
+  endDate: z.date(),
+  activityIds: z.array(z.string()).default([]),
+});
+
 const tripSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
-  cityId: z.string().min(1, "Please select a place"),
-  startDate: z.date({ required_error: "Start date is required" }),
-  endDate: z.date({ required_error: "End date is required" }),
-}).refine((data) => !data.startDate || !data.endDate || isAfter(data.endDate, data.startDate), {
-  message: "End date must be after start date",
-  path: ["endDate"],
+  stops: z.array(stopSchema).min(1, "Add at least one stop"),
 });
 
 export default function CreateTripPage() {
@@ -54,372 +60,385 @@ export default function CreateTripPage() {
   const [cities, setCities] = useState([]);
   const [citySearch, setCitySearch] = useState("");
   const [activities, setActivities] = useState([]);
-  const [selectedActivities, setSelectedActivities] = useState([]);
-  const [selectedCity, setSelectedCity] = useState(null);
+  const [selectedActivitiesForCurrent, setSelectedActivitiesForCurrent] = useState([]);
+  
+  // Local state for the city adding flow
+  const [currentCity, setCurrentCity] = useState(null);
+  const [fromDate, setFromDate] = useState(undefined);
+  const [toDate, setToDate] = useState(undefined);
 
   const form = useForm({
     resolver: zodResolver(tripSchema),
     defaultValues: {
       name: "",
-      cityId: "",
-      startDate: undefined,
-      endDate: undefined,
+      stops: [],
     },
   });
+
+  const stops = form.watch("stops") || [];
 
   // Fetch cities for search
   useEffect(() => {
     const fetchCities = async () => {
+      if (!citySearch) return;
       try {
         const res = await fetch(`/api/cities?search=${citySearch}`);
         const data = await res.json();
         setCities(data);
       } catch (err) {
-        console.error("Error fetching cities", err);
+        console.error(err);
       }
     };
-
     const debounce = setTimeout(fetchCities, 300);
     return () => clearTimeout(debounce);
   }, [citySearch]);
 
-  // Fetch activities when city changes
+  // Fetch activities when currentCity changes
   useEffect(() => {
     const fetchActivities = async () => {
-      const url = selectedCity 
-        ? `/api/activities?cityId=${selectedCity.id}&limit=6`
-        : `/api/activities?limit=6`;
-      
+      if (!currentCity) {
+        setActivities([]);
+        return;
+      }
       try {
-        const res = await fetch(url);
+        const res = await fetch(`/api/activities?cityId=${currentCity.id}&limit=6`);
         const data = await res.json();
         setActivities(data);
+        setSelectedActivitiesForCurrent([]); // Reset selection when city changes
       } catch (err) {
-        console.error("Error fetching activities", err);
+        console.error(err);
       }
     };
-
     fetchActivities();
-  }, [selectedCity]);
+  }, [currentCity]);
 
   const toggleActivity = (activityId) => {
-    setSelectedActivities((prev) =>
-      prev.includes(activityId)
-        ? prev.filter((id) => id !== activityId)
-        : [...prev, activityId]
+    setSelectedActivitiesForCurrent(prev =>
+      prev.includes(activityId) ? prev.filter(id => id !== activityId) : [...prev, activityId]
     );
   };
 
+  const addStop = () => {
+    if (!currentCity || !fromDate || !toDate) {
+      toast.error("Please select city and dates");
+      return;
+    }
+    const newStop = {
+      cityId: currentCity.id,
+      cityName: currentCity.name,
+      startDate: fromDate,
+      endDate: toDate,
+      activityIds: selectedActivitiesForCurrent,
+    };
+    form.setValue("stops", [...stops, newStop]);
+    // Reset local selection
+    setCurrentCity(null);
+    setFromDate(undefined);
+    setToDate(undefined);
+    setCitySearch("");
+    setActivities([]);
+    setSelectedActivitiesForCurrent([]);
+    toast.success(`Added ${newStop.cityName} to trip`);
+  };
+
+  const removeStop = (index) => {
+    form.setValue("stops", stops.filter((_, i) => i !== index));
+  };
+
   const onSubmit = async (values) => {
+    console.log("Submit triggered manually at:", new Date().toLocaleTimeString());
     setLoading(true);
     try {
+      const allDates = values.stops.flatMap(s => [s.startDate, s.endDate]);
+      const minDate = new Date(Math.min(...allDates));
+      const maxDate = new Date(Math.max(...allDates));
+
       const res = await fetch("/api/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...values,
-          preSelectedActivityIds: selectedActivities,
+          name: values.name,
+          startDate: minDate,
+          endDate: maxDate,
+          stops: values.stops,
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create trip");
-
+      if (!res.ok) throw new Error("Failed");
       const trip = await res.json();
-      toast.success("Trip planned successfully!");
+      console.log("Trip created successfully, redirecting...");
       router.push(`/trips/${trip.id}/itinerary`);
     } catch (err) {
-      console.error(err);
-      toast.error("Something went wrong. Please try again.");
+      console.error("Submission Error:", err);
+      toast.error("Error creating trip");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+      e.preventDefault();
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-12" onKeyDown={handleKeyDown}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-8"
+        className="space-y-10"
       >
-        <div className="border-b-4 border-black pb-4">
+        <div className="border-b-2 border-black pb-4">
           <h1 className="text-4xl font-black uppercase italic tracking-tighter text-black">
-            Plan a new trip:
+            Plan Your Journey
           </h1>
-          <p className="text-[10px] font-mono text-gray-500 tracking-widest uppercase mt-1">
-            // JOURNEY_STARTS_HERE //
+          <p className="text-[10px] font-mono text-gray-400 tracking-[0.3em] uppercase mt-1">
+            // TRIP_MASTER_BUILDER //
           </p>
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 bg-white border-2 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-              
-              {/* Name Field */}
+          <div className="space-y-12">
+            
+            {/* 1. Trip Name */}
+            <div className="space-y-4">
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs font-black uppercase tracking-widest">Name:</FormLabel>
+                    <FormLabel className="text-[10px] font-black uppercase tracking-widest text-gray-500">Trip Name</FormLabel>
                     <FormControl>
                       <Input 
-                        placeholder="Trip to Paris..." 
-                        className="rounded-none border-2 border-black h-12 focus-visible:ring-0 focus-visible:border-blue-500 font-mono transition-all"
+                        placeholder="e.g., European Summer Trip" 
+                        className="rounded-none border-2 border-black h-14 font-black uppercase italic text-xl focus-visible:ring-0 focus-visible:border-blue-500 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                         {...field} 
                       />
                     </FormControl>
-                    <FormMessage className="text-[10px] font-black uppercase" />
                   </FormItem>
                 )}
               />
+            </div>
 
-              {/* City Selection */}
-              <FormField
-                control={form.control}
-                name="cityId"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className="text-xs font-black uppercase tracking-widest">Select a Place:</FormLabel>
+            {/* 2. Destination Builder */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-black">Add Destination</h2>
+                <div className="flex-1 border-t border-black/10" />
+              </div>
+
+              <div className="bg-gray-50 border-2 border-black p-6 space-y-6">
+                <div className="grid grid-cols-1 gap-4">
+                  {/* City Select */}
+                  <div className="space-y-2">
+                    <Label className="text-[9px] font-black uppercase text-gray-400">Where are you going?</Label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              "w-full justify-between rounded-none border-2 border-black h-12 font-mono text-left",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value
-                              ? cities.find((c) => c.id === field.value)?.name || selectedCity?.name
-                              : "Search city..."}
-                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
+                        <Button variant="outline" className="w-full h-12 justify-between border-2 border-black rounded-none bg-white font-bold uppercase text-xs">
+                          {currentCity ? currentCity.name : "Search City..."}
+                          <Search className="h-4 w-4 opacity-30" />
+                        </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-full p-0 border-2 border-black rounded-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                        <div className="p-2 border-b-2 border-black">
-                          <Input
-                            placeholder="Search..."
+                      <PopoverContent className="w-80 p-0 border-2 border-black rounded-none">
+                        <div className="p-2 border-b border-black">
+                          <Input 
+                            placeholder="Type city name..." 
                             value={citySearch}
                             onChange={(e) => setCitySearch(e.target.value)}
-                            className="h-10 border-none focus-visible:ring-0 rounded-none font-mono"
+                            className="h-10 border-none focus-visible:ring-0 font-mono text-sm"
                           />
                         </div>
                         <div className="max-h-[200px] overflow-y-auto bg-white">
-                          {cities.length === 0 ? (
-                            <div className="p-4 text-center text-xs font-mono uppercase text-gray-400">
-                              No city found
-                            </div>
-                          ) : (
-                            cities.map((city) => (
-                              <button
-                                key={city.id}
-                                type="button"
-                                className="w-full flex items-center gap-2 p-3 text-left hover:bg-gray-100 transition-colors border-b last:border-none"
-                                onClick={() => {
-                                  form.setValue("cityId", city.id);
-                                  setSelectedCity(city);
-                                  setCitySearch("");
-                                }}
-                              >
-                                <MapPin className="h-4 w-4 text-gray-400" />
-                                <div>
-                                  <p className="text-xs font-black uppercase">{city.name}</p>
-                                  <p className="text-[10px] text-gray-500 font-mono">{city.country}</p>
-                                </div>
-                                {field.value === city.id && <Check className="ml-auto h-4 w-4" />}
-                              </button>
-                            ))
-                          )}
+                          {cities.map((city) => (
+                            <button
+                              key={city.id}
+                              type="button"
+                              className="w-full flex items-center gap-2 p-3 text-left hover:bg-blue-50 border-b last:border-none"
+                              onClick={() => setCurrentCity(city)}
+                            >
+                              <MapPin className="h-3 w-3 text-gray-400" />
+                              <div className="flex-1">
+                                <p className="text-[11px] font-black uppercase">{city.name}</p>
+                                <p className="text-[9px] text-gray-500 font-mono">{city.country}</p>
+                              </div>
+                            </button>
+                          ))}
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <FormMessage className="text-[10px] font-black uppercase" />
-                  </FormItem>
-                )}
-              />
+                  </div>
 
-              {/* Date Pickers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="startDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className="text-xs font-black uppercase tracking-widest">Start Date:</FormLabel>
+                  {/* Activity Suggestions for Selected City */}
+                  {currentCity && activities.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="space-y-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-black uppercase text-gray-400">Activities in {currentCity.name}</Label>
+                        <span className="text-[8px] font-bold text-blue-500 uppercase">Select to include</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {activities.map((activity) => (
+                          <div 
+                            key={activity.id}
+                            onClick={() => toggleActivity(activity.id)}
+                            className={cn(
+                              "group relative aspect-square border-2 border-black cursor-pointer overflow-hidden transition-all",
+                              selectedActivitiesForCurrent.includes(activity.id) 
+                                ? "shadow-none translate-x-[2px] translate-y-[2px] border-blue-500" 
+                                : "shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                            )}
+                          >
+                            <div 
+                              className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" 
+                              style={{ backgroundImage: `url('${activity.imageUrl}')` }} 
+                            />
+                            <div className={cn(
+                              "absolute inset-0 transition-colors duration-300",
+                              selectedActivitiesForCurrent.includes(activity.id) ? "bg-blue-600/40" : "bg-black/30 group-hover:bg-black/10"
+                            )} />
+                            
+                            {selectedActivitiesForCurrent.includes(activity.id) && (
+                              <div className="absolute top-2 right-2 bg-blue-500 text-white p-1 z-20">
+                                <Check className="h-3 w-3" />
+                              </div>
+                            )}
+                            
+                            <div className="absolute inset-0 flex flex-col justify-end p-2">
+                              <span className="text-white text-[9px] font-black uppercase italic leading-none drop-shadow-md">
+                                {activity.name}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Dates Select (Two separate pickers) */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[9px] font-black uppercase text-gray-400">From</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-left font-mono rounded-none border-2 border-black h-12",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
+                          <Button variant="outline" className="w-full h-12 justify-between border-2 border-black rounded-none bg-white font-bold uppercase text-xs">
+                            {fromDate ? format(fromDate, "dd MMM yyyy") : "Start Date"}
+                            <CalendarIcon className="h-4 w-4 opacity-30" />
+                          </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 border-2 border-black rounded-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" align="start">
+                        <PopoverContent className="w-auto p-0 border-2 border-black rounded-none" align="start">
                           <Calendar
                             mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
+                            selected={fromDate}
+                            onSelect={setFromDate}
                             disabled={(date) => date < new Date()}
                             initialFocus
                           />
                         </PopoverContent>
                       </Popover>
-                      <FormMessage className="text-[10px] font-black uppercase" />
-                    </FormItem>
-                  )}
-                />
+                    </div>
 
-                <FormField
-                  control={form.control}
-                  name="endDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className="text-xs font-black uppercase tracking-widest">End Date:</FormLabel>
+                    <div className="space-y-2">
+                      <Label className="text-[9px] font-black uppercase text-gray-400">To</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-left font-mono rounded-none border-2 border-black h-12",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
+                          <Button variant="outline" className="w-full h-12 justify-between border-2 border-black rounded-none bg-white font-bold uppercase text-xs">
+                            {toDate ? format(toDate, "dd MMM yyyy") : "End Date"}
+                            <CalendarIcon className="h-4 w-4 opacity-30" />
+                          </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 border-2 border-black rounded-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" align="start">
+                        <PopoverContent className="w-auto p-0 border-2 border-black rounded-none" align="end">
                           <Calendar
                             mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < (form.getValues("startDate") || new Date())}
+                            selected={toDate}
+                            onSelect={setToDate}
+                            disabled={(date) => date < (fromDate || new Date())}
                             initialFocus
                           />
                         </PopoverContent>
                       </Popover>
-                      <FormMessage className="text-[10px] font-black uppercase" />
-                    </FormItem>
-                  )}
-                />
+                    </div>
+                  </div>
+                </div>
+
+                <Button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addStop();
+                  }}
+                  className="w-full h-14 bg-black text-white rounded-none font-black uppercase italic tracking-tighter shadow-[6px_6px_0px_0px_rgba(59,130,246,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
+                >
+                  <Plus className="h-5 w-5 mr-2" /> Add Destination
+                </Button>
               </div>
-            </div>
 
-            {/* Suggestions Section */}
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <h2 className="text-sm font-black uppercase tracking-widest text-black whitespace-nowrap">
-                  Suggestion for Places to Visit / Activities to Perform
-                </h2>
-                <div className="flex-1 border-t-2 border-black" />
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <AnimatePresence mode="popLayout">
-                  {activities.length > 0 ? (
-                    activities.map((activity, index) => (
-                      <motion.div
-                        key={activity.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.1 }}
-                        whileHover={{ scale: 1.02 }}
-                        className={cn(
-                          "group relative aspect-[4/5] border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden cursor-pointer transition-all",
-                          selectedActivities.includes(activity.id) && "shadow-none translate-x-1 translate-y-1 border-blue-500"
-                        )}
-                        onClick={() => toggleActivity(activity.id)}
-                      >
-                        <div 
-                          className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('${activity.imageUrl || "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400&q=80"}')` }}
-                        >
-                          {/* Hidden img tag just to detect load errors */}
-                          <img 
-                            src={activity.imageUrl} 
-                            className="hidden" 
-                            onError={(e) => {
-                              e.target.parentElement.style.backgroundImage = "url('https://images.unsplash.com/photo-1517816743773-6e0fd518b4a6?auto=format&fit=crop&q=80&w=600')";
-                            }} 
-                          />
-                        </div>
-                        <div className={cn(
-                          "absolute inset-0 bg-black/40 transition-colors",
-                          selectedActivities.includes(activity.id) ? "bg-blue-600/40" : "group-hover:bg-black/20"
-                        )} />
-                        
-                        {selectedActivities.includes(activity.id) && (
-                          <div className="absolute top-2 right-2 z-20 bg-blue-500 text-white p-1">
-                            <Check className="h-3 w-3" />
-                          </div>
-                        )}
-
-                        <div className="absolute inset-0 z-10 flex flex-col justify-end p-4">
-                          <Badge className="w-fit mb-2 bg-black text-[8px] tracking-widest rounded-none border-none">
-                            {activity.type}
-                          </Badge>
-                          <span className="text-white font-black text-xs uppercase leading-tight">
-                            {activity.name}
-                          </span>
-                        </div>
-                      </motion.div>
-                    ))
-                  ) : (
-                    // Skeleton/Empty placeholders
-                    [1, 2, 3, 4, 5, 6].map((i) => (
-                      <div key={i} className="aspect-[4/5] border-2 border-black border-dashed flex flex-col items-center justify-center bg-gray-50 text-gray-300">
-                        <Compass className="h-8 w-8 mb-2 animate-pulse" />
-                        <span className="text-[10px] font-black uppercase">No Data</span>
+              {/* Added Stops List */}
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {stops.map((stop, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="flex items-center gap-4 bg-white border-2 border-black p-4 group"
+                    >
+                      <div className="w-10 h-10 flex items-center justify-center bg-black text-white font-black italic text-sm">
+                        {index + 1}
                       </div>
-                    ))
-                  )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black uppercase italic tracking-tighter">{stop.cityName}</h3>
+                          {stop.activityIds.length > 0 && (
+                            <Badge className="bg-blue-100 text-blue-600 border-none rounded-none text-[8px] font-black uppercase">
+                              {stop.activityIds.length} Activities
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">
+                          {format(stop.startDate, "MMM dd")} — {format(stop.endDate, "MMM dd")} ({differenceInDays(stop.endDate, stop.startDate)} Nights)
+                        </p>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => removeStop(index)}
+                        className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </motion.div>
+                  ))}
                 </AnimatePresence>
               </div>
             </div>
 
-            {/* Submit Button */}
-            <div className="flex justify-center pt-8">
+            {/* Submit */}
+            <div className="flex flex-col items-center pt-8 border-t-2 border-black">
               <Button
-                type="submit"
-                disabled={loading}
-                className="group relative h-16 w-full md:w-64 bg-black text-white rounded-none font-black text-lg italic uppercase tracking-tighter shadow-[8px_8px_0px_0px_rgba(59,130,246,1)] hover:shadow-none hover:translate-x-2 hover:translate-y-2 transition-all overflow-hidden"
+                type="button"
+                onClick={() => form.handleSubmit(onSubmit)()}
+                disabled={loading || stops.length === 0}
+                className="h-20 w-full bg-black text-white rounded-none font-black text-2xl italic uppercase tracking-tighter shadow-[10px_10px_0px_0px_rgba(34,197,94,1)] hover:shadow-none hover:translate-x-2 hover:translate-y-2 transition-all disabled:opacity-50 disabled:grayscale"
               >
                 {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    PLANNING...
-                  </>
+                  <Loader2 className="h-8 w-8 animate-spin" />
                 ) : (
                   <>
-                    CREATE TRIP
-                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                    CREATE MASTERPLAN
+                    <ArrowRight className="ml-3 h-8 w-8" />
                   </>
                 )}
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 transform rotate-45 translate-x-2 translate-y-2" />
               </Button>
+              {stops.length === 0 && (
+                <p className="mt-4 text-[10px] font-black uppercase text-red-500 tracking-[0.2em] animate-pulse">Select at least one destination to proceed</p>
+              )}
             </div>
-          </form>
+          </div>
         </Form>
       </motion.div>
     </div>

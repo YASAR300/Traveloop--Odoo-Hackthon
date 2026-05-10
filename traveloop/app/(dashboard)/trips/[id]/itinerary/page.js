@@ -398,14 +398,44 @@ const SectionCard = ({ section, index, onUpdate, onDelete, onSaveBudget, onAiFil
           </a>
         )}
 
-        {/* Bottom Bar: Dates & Budget */}
+        {/* Bottom Bar: Day, Dates & Budget */}
         <div className="flex flex-col sm:flex-row gap-4">
+          {/* Day Selector */}
+          <div className="flex-1 flex items-center bg-gray-50 border-2 border-black">
+            <div className="px-3 border-r-2 border-black flex items-center justify-center h-full bg-white">
+              <span className="text-[10px] font-black uppercase italic tracking-tighter">Day</span>
+            </div>
+            <Select 
+              value={section.startDate ? Math.floor((new Date(section.startDate) - new Date(section.trip?.startDate || section.startDate)) / (1000 * 60 * 60 * 24)) + 1 : 1}
+              onValueChange={(day) => {
+                const tripStart = new Date(section.trip?.startDate || section.startDate);
+                const newDate = new Date(tripStart);
+                newDate.setDate(newDate.getDate() + (parseInt(day) - 1));
+                onUpdate(section.id, { 
+                  startDate: newDate.toISOString(), 
+                  endDate: newDate.toISOString() 
+                });
+              }}
+            >
+              <SelectTrigger className="flex-1 h-11 border-0 rounded-none font-black text-xs focus:ring-0">
+                <SelectValue placeholder="Select Day" />
+              </SelectTrigger>
+              <SelectContent className="border-2 border-black rounded-none">
+                {Array.from({ length: 15 }, (_, i) => (
+                  <SelectItem key={i + 1} value={(i + 1).toString()} className="text-xs font-bold">
+                    Day {i + 1}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <Popover>
             <PopoverTrigger asChild>
               <button className="flex-1 flex items-center gap-3 px-4 h-11 bg-gray-50 border-2 border-black hover:bg-white transition-all text-left">
                 <CalendarIcon className="h-4 w-4 text-gray-400" />
                 <div className="flex flex-col">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Date Range</span>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Custom Date</span>
                   <span className="text-[10px] font-black uppercase">
                     {section.startDate ? format(new Date(section.startDate), "dd MMM") : "Start"} 
                     {" → "} 
@@ -461,6 +491,24 @@ export default function AdvancedItineraryPage() {
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState("idle"); // idle, saving, saved
+  const [viewMode, setViewMode] = useState("list"); // list or days
+
+  const dayGroups = useMemo(() => {
+    if (!trip?.startDate) return { "Unscheduled": sections };
+    const groups = {};
+    const tripStart = new Date(trip.startDate);
+    
+    sections.forEach(s => {
+      let label = "Unscheduled";
+      if (s.startDate) {
+        const diff = Math.floor((new Date(s.startDate) - tripStart) / (1000 * 60 * 60 * 24)) + 1;
+        label = diff > 0 ? `Day ${diff}` : "Day 1";
+      }
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(s);
+    });
+    return groups;
+  }, [sections, trip]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 10 } }),
@@ -645,82 +693,96 @@ export default function AdvancedItineraryPage() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10 pb-40">
-      {/* Top Banner Header */}
-      <div className="mb-10">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-8 bg-blue-500" />
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em]">ITINERARY_BUILDER // LIVE_SYNC</span>
-              <h1 className="text-4xl font-black text-black uppercase italic tracking-tighter leading-none">{trip?.name}</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <AnimatePresence>
-              {saveStatus !== "idle" && (
-                <motion.div 
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center gap-2 px-3 py-1 bg-gray-50 border border-black text-[10px] font-bold"
-                >
-                  {saveStatus === "saving" ? <Loader2 className="h-3 w-3 animate-spin" /> : "✓"}
-                  {saveStatus === "saving" ? "SAVING..." : "SAVED"}
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <Button variant="outline" className="border-2 border-black rounded-none h-10 px-4">
-              <Share2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Progress Section */}
-        <div className="bg-white border-2 border-black p-4 mb-10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-black uppercase tracking-widest">{plannedCount} of {sections.length} Sections Planned</span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">{progressPercent}% COMPLETE</span>
-          </div>
-          <div className="h-4 bg-gray-100 border-2 border-black relative overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPercent}%` }}
-              className="absolute inset-0 bg-blue-500"
-            />
-          </div>
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+    <div className="max-w-7xl mx-auto px-4 py-10 pb-40 flex flex-col lg:flex-row gap-10">
+      {/* Left Column: Builder */}
+      <div className="flex-1 max-w-4xl">
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-8 bg-blue-500" />
               <div className="flex flex-col">
-                <span className="text-[8px] font-black uppercase text-gray-400">Total Planned Cost</span>
-                <span className="text-xl font-black">₹{totalPlannedBudget.toLocaleString()}</span>
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em]">ITINERARY_BUILDER // LIVE_SYNC</span>
+                <h1 className="text-4xl font-black text-black uppercase italic tracking-tighter leading-none">{trip?.name}</h1>
               </div>
             </div>
-            <Button asChild className="bg-black text-white rounded-none font-black uppercase italic tracking-tighter shadow-[3px_3px_0px_0px_rgba(34,197,94,1)]">
-              <Link href={`/trips/${tripId}/view`}><Eye className="h-4 w-4 mr-2" /> Preview Itinerary</Link>
-            </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex border-2 border-black p-1 bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <button 
+                  onClick={() => setViewMode("list")}
+                  className={cn("px-3 py-1 text-[10px] font-black uppercase italic transition-all", viewMode === "list" ? "bg-black text-white" : "hover:bg-gray-50")}
+                >List</button>
+                <button 
+                  onClick={() => setViewMode("days")}
+                  className={cn("px-3 py-1 text-[10px] font-black uppercase italic transition-all", viewMode === "days" ? "bg-black text-white" : "hover:bg-gray-50")}
+                >Days</button>
+              </div>
+              <Button variant="outline" className="border-2 border-black rounded-none h-10 px-4">
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Progress Section */}
+          <div className="bg-white border-2 border-black p-4 mb-10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest">{plannedCount} of {sections.length} Sections Planned</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">{progressPercent}% COMPLETE</span>
+            </div>
+            <div className="h-4 bg-gray-100 border-2 border-black relative overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercent}%` }}
+                className="absolute inset-0 bg-blue-500"
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Sections List */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-          <LayoutGroup>
-            {sections.map((section, index) => (
-              <SectionCard 
-                key={section.id} 
-                section={section} 
-                index={index}
-                onUpdate={updateSection}
-                onDelete={deleteSection}
-                onSaveBudget={saveBudget}
-                onAiFill={handleAiFill}
-              />
+        {/* Sections List */}
+        {viewMode === "list" ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+              <LayoutGroup>
+                {sections.map((section, index) => (
+                  <SectionCard 
+                    key={section.id} 
+                    section={section} 
+                    index={index}
+                    onUpdate={updateSection}
+                    onDelete={deleteSection}
+                    onSaveBudget={saveBudget}
+                    onAiFill={handleAiFill}
+                  />
+                ))}
+              </LayoutGroup>
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <div className="space-y-12">
+            {Object.entries(dayGroups).sort(([a],[b]) => a.localeCompare(b)).map(([day, daySections]) => (
+              <div key={day} className="relative">
+                <div className="flex items-center gap-4 mb-6">
+                  <h2 className="text-xl font-black uppercase italic tracking-tighter bg-black text-white px-4 py-1">{day}</h2>
+                  <div className="h-0.5 flex-1 bg-black/10" />
+                  <span className="text-[10px] font-bold text-gray-400">₹{daySections.reduce((acc, s) => acc + (s.sectionBudgets?.reduce((a,c) => a+c.amount,0) || 0), 0).toLocaleString()}</span>
+                </div>
+                <div className="space-y-4">
+                  {daySections.map((section, index) => (
+                    <SectionCard 
+                      key={section.id} 
+                      section={section} 
+                      index={index}
+                      onUpdate={updateSection}
+                      onDelete={deleteSection}
+                      onSaveBudget={saveBudget}
+                      onAiFill={handleAiFill}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
-          </LayoutGroup>
-        </SortableContext>
-      </DndContext>
+          </div>
+        )}
 
       {/* Templates Row */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -752,18 +814,73 @@ export default function AdvancedItineraryPage() {
         >
           <Target className="h-3 w-3 mr-2" /> Activity Template
         </Button>
+
+        {/* Add Section Button */}
+        <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          onClick={() => addSection()}
+          className="w-full h-24 border-4 border-black border-dashed flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-black hover:border-solid hover:bg-gray-50 transition-all mb-12"
+        >
+          <Plus className="h-8 w-8" />
+          <span className="text-xs font-black uppercase tracking-widest">Add Another Section</span>
+        </motion.button>
       </div>
 
-      {/* Add Section Button */}
-      <motion.button
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={() => addSection()}
-        className="w-full h-24 border-4 border-black border-dashed flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-black hover:border-solid hover:bg-gray-50 transition-all mb-12"
-      >
-        <Plus className="h-8 w-8" />
-        <span className="text-xs font-black uppercase tracking-widest">Add Another Section</span>
-      </motion.button>
+      </div>
+
+      {/* Right Column: Preview Sidebar */}
+      <aside className="hidden lg:block w-80">
+        <div className="sticky top-24 space-y-6">
+          <div className="bg-white border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter mb-4 flex items-center gap-2">
+              <Eye className="h-5 w-5" /> Live Preview
+            </h3>
+            
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+              {sections.length === 0 ? (
+                <div className="py-10 text-center text-[10px] font-bold text-gray-400 uppercase italic">
+                  No places added yet
+                </div>
+              ) : (
+                sections.map((s, i) => (
+                  <div key={s.id} className="flex gap-3 group">
+                    <div className="flex flex-col items-center">
+                      <div className="w-4 h-4 rounded-full border-2 border-black bg-white group-hover:bg-blue-500 transition-all" />
+                      {i < sections.length - 1 && <div className="w-0.5 flex-1 bg-black" />}
+                    </div>
+                    <div className="flex-1 pb-4">
+                      <p className="text-[10px] font-black uppercase italic leading-none truncate">{s.title || "Untitled Section"}</p>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">
+                        {s.sectionType} • ₹{(s.sectionBudgets?.reduce((a,c) => a+c.amount,0) || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-6 pt-6 border-t-2 border-black space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase text-gray-400">Total Planned</span>
+                <span className="text-lg font-black">₹{totalPlannedBudget.toLocaleString()}</span>
+              </div>
+              <Button asChild className="w-full bg-black text-white rounded-none font-black uppercase italic h-12 shadow-[4px_4px_0px_0px_rgba(34,197,94,1)] hover:shadow-none transition-all">
+                <Link href={`/trips/${tripId}/view`}>Final Preview →</Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border-2 border-black p-4">
+            <h4 className="text-[10px] font-black uppercase mb-2 flex items-center gap-2">
+              <Sparkles className="h-3 w-3" /> Quick Tips
+            </h4>
+            <p className="text-[9px] font-bold text-blue-800 leading-relaxed uppercase">
+              Use templates to quickly add flights or hotels. Group by "Days" to see your chronological flow.
+            </p>
+          </div>
+        </div>
+      </aside>
 
       {/* Cost Heatmap (Sticky Bottom) */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/95 backdrop-blur-md border-t-4 border-black z-40 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">

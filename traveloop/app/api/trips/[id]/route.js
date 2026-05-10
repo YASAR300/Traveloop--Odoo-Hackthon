@@ -1,95 +1,69 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
+import { differenceInDays, addDays, startOfDay } from "date-fns";
 
 export async function GET(request, { params }) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
   try {
-    const session = await auth();
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-
     const trip = await prisma.trip.findUnique({
-      where: { 
-        id,
-        userId: session.user.id 
-      },
+      where: { id },
       include: {
-        stops: {
-          include: { city: true }
-        },
+        stops: { include: { city: true } },
         sections: {
           include: { sectionBudgets: true },
           orderBy: { order: "asc" }
-        }
-      }
+        },
+        budget: true,
+      },
     });
 
     if (!trip) {
       return NextResponse.json({ error: "Trip not found" }, { status: 404 });
     }
 
-    return NextResponse.json(trip);
-  } catch (error) {
-    console.error("Trip GET Error:", error);
-    return NextResponse.json({ error: "Failed to fetch trip" }, { status: 500 });
-  }
-}
+    // Group sections by day
+    const dayMap = {};
+    const tripStart = trip.startDate ? startOfDay(new Date(trip.startDate)) : null;
 
-export async function PATCH(request, { params }) {
-  try {
-    const session = await auth();
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const body = await request.json();
-    const { name, description, startDate, endDate, coverImage, isPublic } = body;
-
-    const updatedTrip = await prisma.trip.update({
-      where: { 
-        id,
-        userId: session.user.id // Security check
-      },
-      data: {
-        ...(name && { name }),
-        ...(description && { description }),
-        ...(startDate && { startDate: new Date(startDate) }),
-        ...(endDate && { endDate: new Date(endDate) }),
-        ...(coverImage !== undefined && { coverImage }),
-        ...(isPublic !== undefined && { isPublic }),
+    trip.sections.forEach(section => {
+      let day = "Unscheduled";
+      if (tripStart && section.startDate) {
+        const sectionStart = startOfDay(new Date(section.startDate));
+        const dayDiff = differenceInDays(sectionStart, tripStart) + 1;
+        day = dayDiff > 0 ? `Day ${dayDiff}` : "Day 1";
       }
+      
+      if (!dayMap[day]) dayMap[day] = [];
+      dayMap[day].push({
+        ...section,
+        totalCost: section.sectionBudgets.reduce((sum, b) => sum + (b.amount || 0), 0)
+      });
     });
 
-    return NextResponse.json(updatedTrip);
-  } catch (error) {
-    console.error("Trip PATCH Error:", error);
-    return NextResponse.json({ error: "Failed to update trip" }, { status: 500 });
-  }
-}
-
-export async function DELETE(request, { params }) {
-  try {
-    const session = await auth();
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-
-    await prisma.trip.delete({
-      where: { 
-        id,
-        userId: session.user.id // Security check
-      }
+    // Sort days numerically
+    const sortedDays = Object.keys(dayMap).sort((a, b) => {
+      if (a === "Unscheduled") return 1;
+      if (b === "Unscheduled") return -1;
+      return parseInt(a.replace("Day ", "")) - parseInt(b.replace("Day ", ""));
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      trip,
+      dayMap,
+      sortedDays,
+      totalSpent: trip.sections.reduce((sum, s) => 
+        sum + s.sectionBudgets.reduce((bsum, b) => bsum + (b.amount || 0), 0), 0
+      )
+    });
   } catch (error) {
-    console.error("Trip DELETE Error:", error);
-    return NextResponse.json({ error: "Failed to delete trip" }, { status: 500 });
+    console.error("Trip API Error:", error);
+    return NextResponse.json({ error: "Failed to fetch trip details" }, { status: 500 });
   }
 }

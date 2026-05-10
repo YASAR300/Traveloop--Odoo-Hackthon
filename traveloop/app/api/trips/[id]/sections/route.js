@@ -15,6 +15,7 @@ export async function GET(request, { params }) {
       where: { tripId },
       include: {
         sectionBudgets: true,
+        trip: true,
       },
       orderBy: { order: "asc" },
     });

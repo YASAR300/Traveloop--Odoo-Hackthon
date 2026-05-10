@@ -15,8 +15,13 @@ export async function GET() {
         stops: {
           include: {
             city: true,
-            stopActivities: true,
+            stopActivities: {
+              include: {
+                activity: true
+              }
+            },
           },
+          orderBy: { order: "asc" }
         },
         sections: {
           include: {
@@ -27,7 +32,6 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    // Calculate dynamic metadata for each trip
     const tripsWithMetadata = trips.map(trip => {
       const citiesCount = trip.stops.length;
       const activitiesCount = trip.stops.reduce((acc, stop) => acc + stop.stopActivities.length, 0);
@@ -58,34 +62,14 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { name, cityId, startDate, endDate, preSelectedActivityIds = [] } = body;
+    const { name, startDate, endDate, stops = [] } = body;
 
-    if (!name || !cityId || !startDate || !endDate) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!name || stops.length === 0) {
+      return NextResponse.json({ error: "Missing required fields: name or stops" }, { status: 400 });
     }
 
     const trip = await prisma.$transaction(async (tx) => {
-      let finalCityId = cityId;
-
-      if (cityId.startsWith("ext_")) {
-        const cityName = cityId.replace("ext_", "").split("-").map(word => 
-          word.charAt(0).toUpperCase() + word.slice(1)
-        ).join(" ");
-
-        const city = await tx.city.upsert({
-          where: { id: cityId },
-          create: {
-            id: cityId,
-            name: cityName,
-            country: "Global",
-            region: "Other",
-            popularity: 50,
-          },
-          update: {},
-        });
-        finalCityId = city.id;
-      }
-
+      // 1. Create the Trip record
       const newTrip = await tx.trip.create({
         data: {
           name,
@@ -95,25 +79,52 @@ export async function POST(request) {
         },
       });
 
-      const stop = await tx.stop.create({
-        data: {
-          tripId: newTrip.id,
-          cityId: finalCityId,
-          order: 1,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-        },
-      });
+      // 2. Create Stop records and their activities for each city
+      for (let i = 0; i < stops.length; i++) {
+        const stopData = stops[i];
+        let finalCityId = stopData.cityId;
 
-      if (preSelectedActivityIds.length > 0) {
-        const realActivityIds = preSelectedActivityIds.filter(id => !id.startsWith("gen_"));
-        if (realActivityIds.length > 0) {
-          await tx.stopActivity.createMany({
-            data: realActivityIds.map((actId) => ({
-              stopId: stop.id,
-              activityId: actId,
-            })),
+        // Handle external/dynamic city IDs if they start with ext_
+        if (finalCityId.startsWith("ext_")) {
+          const cityName = finalCityId.replace("ext_", "").split("-").map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+          ).join(" ");
+
+          const city = await tx.city.upsert({
+            where: { id: finalCityId },
+            create: {
+              id: finalCityId,
+              name: cityName,
+              country: "Global",
+              region: "Other",
+              popularity: 50,
+            },
+            update: {},
           });
+          finalCityId = city.id;
+        }
+
+        const stop = await tx.stop.create({
+          data: {
+            tripId: newTrip.id,
+            cityId: finalCityId,
+            order: i + 1,
+            startDate: new Date(stopData.startDate),
+            endDate: new Date(stopData.endDate),
+          },
+        });
+        
+        // 3. Create activities for THIS specific stop
+        if (stopData.activityIds && stopData.activityIds.length > 0) {
+          const realActivityIds = stopData.activityIds.filter(id => !id.startsWith("gen_"));
+          if (realActivityIds.length > 0) {
+            await tx.stopActivity.createMany({
+              data: realActivityIds.map((actId) => ({
+                stopId: stop.id,
+                activityId: actId,
+              })),
+            });
+          }
         }
       }
 
