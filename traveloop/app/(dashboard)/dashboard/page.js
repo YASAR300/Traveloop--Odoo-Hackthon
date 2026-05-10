@@ -182,7 +182,9 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 text-gray-500">
                       <Calendar className="h-3 w-3" />
                       <span className="text-[10px] font-bold uppercase tracking-widest">
-                        {format(new Date(trip.startDate), "MMM dd")} - {format(new Date(trip.endDate), "MMM dd, yyyy")}
+                        {trip.startDate && trip.endDate 
+                          ? `${format(new Date(trip.startDate), "MMM dd")} - ${format(new Date(trip.endDate), "MMM dd, yyyy")}`
+                          : "Flexible Dates"}
                       </span>
                     </div>
                     <div className="mt-2 pt-3 border-t border-dashed border-gray-200 flex items-center justify-between">

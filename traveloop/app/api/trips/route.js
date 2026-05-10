@@ -15,13 +15,35 @@ export async function GET() {
         stops: {
           include: {
             city: true,
+            stopActivities: true,
           },
         },
+        sections: {
+          include: {
+            sectionBudgets: true
+          }
+        }
       },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(trips);
+    // Calculate dynamic metadata for each trip
+    const tripsWithMetadata = trips.map(trip => {
+      const citiesCount = trip.stops.length;
+      const activitiesCount = trip.stops.reduce((acc, stop) => acc + stop.stopActivities.length, 0);
+      const totalBudget = trip.sections.reduce((acc, section) => {
+        return acc + section.sectionBudgets.reduce((sAcc, b) => sAcc + (b.amount || 0), 0);
+      }, 0);
+
+      return {
+        ...trip,
+        citiesCount,
+        activitiesCount,
+        totalBudget
+      };
+    });
+
+    return NextResponse.json(tripsWithMetadata);
   } catch (error) {
     console.error("Trips GET Error:", error);
     return NextResponse.json({ error: "Failed to fetch trips" }, { status: 500 });
